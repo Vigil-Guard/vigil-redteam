@@ -295,6 +295,72 @@ def import_golden(input_path: str, output: str) -> None:
     click.echo(f"Imported {len(scenarios)} scenarios to {output}")
 
 
+@import_group.command("spml")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--output", required=True, type=click.Path())
+def import_spml(input_path: str, output: str) -> None:
+    """Import SPML dataset (system prompt + user prompt + injection degree)."""
+    from vigil_redteam.importers.spml import SPMLImporter
+
+    importer = SPMLImporter()
+    scenarios = importer.import_records(Path(input_path))
+    importer.write_jsonl(scenarios, Path(output))
+    click.echo(f"Imported {len(scenarios)} scenarios to {output}")
+
+
+@import_group.command("hackaprompt")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--output", required=True, type=click.Path())
+def import_hackaprompt(input_path: str, output: str) -> None:
+    """Import HackAPrompt competition data (parquet)."""
+    from vigil_redteam.importers.hackaprompt import HackAPromptImporter
+
+    importer = HackAPromptImporter()
+    scenarios = importer.import_records(Path(input_path))
+    importer.write_jsonl(scenarios, Path(output))
+    click.echo(f"Imported {len(scenarios)} scenarios to {output}")
+
+
+@import_group.command("systemchat")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--output", required=True, type=click.Path())
+def import_systemchat(input_path: str, output: str) -> None:
+    """Import SystemChat multi-turn conversations (benign)."""
+    from vigil_redteam.importers.systemchat import SystemChatImporter
+
+    importer = SystemChatImporter()
+    scenarios = importer.import_records(Path(input_path))
+    importer.write_jsonl(scenarios, Path(output))
+    click.echo(f"Imported {len(scenarios)} scenarios to {output}")
+
+
+@import_group.command("enterprise")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--output", required=True, type=click.Path())
+def import_enterprise(input_path: str, output: str) -> None:
+    """Import Enterprise categorized attack prompts."""
+    from vigil_redteam.importers.enterprise import EnterpriseImporter
+
+    importer = EnterpriseImporter()
+    scenarios = importer.import_records(Path(input_path))
+    importer.write_jsonl(scenarios, Path(output))
+    click.echo(f"Imported {len(scenarios)} scenarios to {output}")
+
+
+@import_group.command("oasst2")
+@click.option("--input", "input_path", required=True, type=click.Path(exists=True))
+@click.option("--output", required=True, type=click.Path())
+@click.option("--language", default="pl", help="Language filter (ISO 639-1)")
+def import_oasst2(input_path: str, output: str, language: str) -> None:
+    """Import OASST2 messages as benign hard negatives."""
+    from vigil_redteam.importers.oasst2 import OASST2Importer
+
+    importer = OASST2Importer(language=language)
+    scenarios = importer.import_records(Path(input_path))
+    importer.write_jsonl(scenarios, Path(output))
+    click.echo(f"Imported {len(scenarios)} scenarios to {output}")
+
+
 def _resolve_dataset_dir(dataset: str, cfg) -> Path:
     p = Path(dataset)
     if p.is_dir():
