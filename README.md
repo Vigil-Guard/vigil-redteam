@@ -1,16 +1,18 @@
 # vigil-redteam
 
-Adversarial testing framework for [Vigil Guard Enterprise](https://vigilguard.ai). Tests the full VGE detection pipeline — not individual classifiers — against structured attack scenarios with real-world data.
+Open adversarial benchmark for prompt injection detection systems. Built for [Vigil Guard Enterprise](https://vigilguard.ai) but applicable to any guardrail API that accepts text input and returns a block/allow decision.
 
-## What this does
+## What this is
 
-Sends test prompts through `POST /v1/guard/input` (the same endpoint production traffic uses) and measures:
+A structured benchmark with 994 real-world scenarios (not synthetic), covering 8 attack categories, 35 subcategories, 3 languages, and 6 input channels. Includes a mutation engine (17 transforms), failure classification (11 types), build-over-build regression tracking, and split reporting for single-turn vs context-dependent scenarios.
 
-- **What the system misses** — attack recall per category, language, channel
-- **What it wrongly blocks** — false positive rate on realistic business content
-- **Which layers catch what** — per-branch score analysis (heuristics, semantic, llm_guard)
-- **How robust it is** — mutation survival rate across 17 transform types
-- **How it compares** — build-over-build diff with regression detection
+Measures five dimensions of guardrail quality:
+
+- **Security** — attack recall per category, language, channel, obfuscation type
+- **Usability** — false positive rate on realistic business content (PL + EN)
+- **Pipeline** — per-layer analysis (which detector catches what, layer overlap, blind spots)
+- **Robustness** — mutation survival rate, paraphrase consistency, PL/EN parity
+- **Regression** — build-over-build diff with metric deltas and failure cluster tracking
 
 ## Dataset (994 records)
 
@@ -83,15 +85,17 @@ pip install pandas pyarrow
 
 ### Prerequisites
 
-- VGE stack running (via `stack.sh up -d`)
-- API accessible at `https://api.vigilguard`
-- Valid API key
+Any guardrail system with an HTTP API that:
+- Accepts a POST request with a text prompt
+- Returns a block/allow decision with a numeric score
+
+The default target is Vigil Guard Enterprise (`POST /v1/guard/input`), but the client can be adapted for other systems.
 
 ### Environment
 
 ```bash
-export VGE_API_KEY="vg_test_..."
-export VIGIL_SKIP_TLS_VERIFY=1    # self-signed TLS on dev
+export VGE_API_KEY="your_api_key"
+export VIGIL_SKIP_TLS_VERIFY=1    # if using self-signed TLS
 ```
 
 ### Execute
@@ -114,6 +118,25 @@ vigil-redteam run --dataset datasets/coverage --limit 100 --concurrency 4 --conf
 ```
 
 **Important:** `--concurrency` must equal `rps` in config (default 4). Mismatched values cause pipeline stalls.
+
+### Context mode
+
+Not all scenarios are testable by every system. Many real-world attacks depend on system prompts, conversation history, or external document context that a simple `{prompt: string}` API cannot receive.
+
+The benchmark tags every scenario as `single_turn` or `contextual`:
+
+- **`single_turn`** — verdict is determinable from the prompt text alone. These are valid for calibration of any guardrail that accepts raw text.
+- **`contextual`** — verdict depends on system prompt, conversation state, or external context. These are diagnostic — they show what the system *would* miss in a richer integration, but should not penalize a text-only API.
+
+```bash
+# Run only single_turn (valid for calibration)
+vigil-redteam run --dataset datasets/coverage --mode single_turn --concurrency 4 --config redteam.toml.example
+
+# Run only contextual (diagnostic)
+vigil-redteam run --dataset datasets/coverage --mode contextual --concurrency 4 --config redteam.toml.example
+```
+
+Reports automatically show split metrics and flag contextual results as diagnostic.
 
 ### Output
 
