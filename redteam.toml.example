@@ -4,8 +4,9 @@ verify_tls = false
 timeout = 30
 
 [runner]
-concurrency = 8
-rps = 10
+# concurrency MUST equal rps — otherwise pipeline stalls
+concurrency = 4
+rps = 4
 retries = 2
 threshold = 40
 

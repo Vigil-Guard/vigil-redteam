@@ -11,6 +11,7 @@ from vigil_redteam.metrics.pipeline import (
     compute_layer_coverage,
     compute_pipeline_metrics,
 )
+from vigil_redteam.metrics.robustness import compute_mutation_survival_rate
 from vigil_redteam.metrics.security import (
     compute_recall_per_category,
     compute_recall_per_dimension,
