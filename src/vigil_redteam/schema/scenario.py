@@ -1,0 +1,78 @@
+"""TestScenario — the core JSONL record for adversarial test cases."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from pydantic import BaseModel, Field
+
+from vigil_redteam.schema.enums import AttackCategory, Channel, Tier, Verdict
+
+
+class TestScenario(BaseModel):
+    """A single adversarial test case.
+
+    Only `user_input` is sent to VGE API as the `prompt` field.
+    All other fields are metadata for filtering, grouping, and reporting.
+    """
+
+    id: str
+    category: AttackCategory
+    subcategory: str
+    language: str = Field(description="ISO 639-1 code: pl, en, mixed")
+    channel: Channel
+    user_input: str = Field(min_length=1)
+    external_context: str | None = None
+    system_context: str | None = None
+    expected_verdict: Verdict
+    expected_severity: int = Field(ge=0, le=5)
+    expected_triggered_layers: list[str] = Field(default_factory=list)
+    mutation_family: str | None = None
+    tier: Tier
+    source: str
+    notes: str = ""
+
+    model_config = {"extra": "ignore"}
+
+
+def load_scenarios(path: Path) -> list[TestScenario]:
+    """Load TestScenario records from a JSONL file."""
+    scenarios = []
+    with path.open() as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                scenarios.append(TestScenario.model_validate(data))
+            except Exception as e:
+                raise ValueError(f"{path}:{line_num}: {e}") from e
+    return scenarios
+
+
+def load_scenarios_from_dir(directory: Path) -> list[TestScenario]:
+    """Load all JSONL files from a directory."""
+    scenarios = []
+    for jsonl_file in sorted(directory.glob("*.jsonl")):
+        scenarios.extend(load_scenarios(jsonl_file))
+    return scenarios
+
+
+def validate_dataset(path: Path) -> list[str]:
+    """Validate a JSONL file and return list of errors (empty = valid)."""
+    errors = []
+    with path.open() as f:
+        for line_num, line in enumerate(f, 1):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                TestScenario.model_validate(data)
+            except json.JSONDecodeError as e:
+                errors.append(f"{path}:{line_num}: invalid JSON: {e}")
+            except Exception as e:
+                errors.append(f"{path}:{line_num}: {e}")
+    return errors

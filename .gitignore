@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Generated data (not committed)
+datasets/mutation/
+datasets/live_failures/
+results/
+reports/
+
+# Secrets
+.env
+redteam.toml
+
+# OS
+.DS_Store
+Thumbs.db
