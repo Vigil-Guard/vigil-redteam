@@ -1,7 +1,7 @@
 """Import Enterprise prompt dataset — 49K categorized attack prompts.
 
-Uses content-based classification instead of trusting source categories,
-since source labels (e.g. CONTEXT_MANIPULATION) often don't match actual content.
+Uses source category as primary signal (directionally correct for this dataset),
+with content-based refinement for subcategory and severity.
 """
 
 from __future__ import annotations
@@ -15,7 +15,6 @@ from vigil_redteam.importers.base import BaseImporter
 from vigil_redteam.schema.enums import AttackCategory, Channel, Tier, Verdict
 from vigil_redteam.schema.scenario import TestScenario
 
-# Source categories to sample from (all are attacks)
 _SAMPLE_CATEGORIES = {
     "JAILBREAK_ROLEPLAY",
     "INSTRUCTION_OVERRIDE",
@@ -31,59 +30,32 @@ _SAMPLE_CATEGORIES = {
     "FEW_SHOT_ATTACK",
     "REFUSAL_SUPPRESSION",
     "GOAL_HIJACKING",
+    "CBRNE",
 }
 
-# Content-based classification keywords
-_OVERRIDE_KW = (
-    "ignore",
-    "disregard",
-    "forget",
-    "override",
-    "bypass",
-    "new instructions",
-    "from now on",
-    "you are now",
-    "reset",
-    "developer mode",
-    "maintenance mode",
-)
-_EXFIL_KW = (
-    "secret",
-    "api key",
-    "password",
-    "credential",
-    "token",
-    "dump",
-    "export all",
-    "reveal",
-    "show me your",
-    "print your",
-    "output your",
-    "share your config",
-)
-_ROLEPLAY_KW = (
-    "roleplay",
-    "pretend",
-    "act as",
-    "character named",
-    "persona",
-    "dan ",
-    "jailbreak",
-    "no restrictions",
-    "without limitations",
-    "unrestricted",
-)
-_OBFUSCATION_KW = (
-    "base64",
-    "decode this",
-    "hex",
-    "encode",
-    "translate this encoded",
-)
+# Source category -> (benchmark category, default subcategory)
+# Based on actual content analysis of the enterprise dataset
+_SOURCE_MAP: dict[str, tuple[AttackCategory, str]] = {
+    "JAILBREAK_ROLEPLAY": (AttackCategory.SEMANTIC_EVASION, "roleplay"),
+    "INSTRUCTION_OVERRIDE": (AttackCategory.INSTRUCTION_OVERRIDE, "ignore_previous"),
+    "PARTIAL_EXTRACTION": (AttackCategory.OBFUSCATION, "code_wrapped"),
+    "SENSITIVE_DISCLOSURE": (AttackCategory.DATA_EXFILTRATION, "reveal_secrets"),
+    "CODE_INJECTION": (AttackCategory.OBFUSCATION, "code_wrapped"),
+    "MULTILINGUAL_ATTACK": (AttackCategory.OBFUSCATION, "mixed_language"),
+    "PROMPT_LEAKING": (AttackCategory.DATA_EXFILTRATION, "dump_memory"),
+    "CONTEXT_MANIPULATION": (AttackCategory.CONTEXT_INCONSISTENCY, "business_msg_hidden_override"),
+    "PAYLOAD_SPLITTING": (AttackCategory.OBFUSCATION, "code_wrapped"),
+    "ADVERSARIAL_SUFFIX": (AttackCategory.OBFUSCATION, "homoglyphs"),
+    "AUTHORITY_APPEAL": (AttackCategory.INSTRUCTION_OVERRIDE, "act_as_admin"),
+    "FEW_SHOT_ATTACK": (AttackCategory.SEMANTIC_EVASION, "indirect_phrasing"),
+    "REFUSAL_SUPPRESSION": (AttackCategory.SEMANTIC_EVASION, "euphemistic"),
+    "GOAL_HIJACKING": (AttackCategory.INSTRUCTION_OVERRIDE, "hierarchy_conflict"),
+    "CBRNE": (AttackCategory.SEMANTIC_EVASION, "research_pretext"),
+}
 
 
 class EnterpriseImporter(BaseImporter):
-    """Import enterprise dataset with content-based classification."""
+    """Import enterprise dataset with source-category-based classification."""
 
     def __init__(self, budget: int = 200):
         self._budget = budget
@@ -129,9 +101,13 @@ class EnterpriseImporter(BaseImporter):
             prompt = prompt[:2000]
 
         source_cat = row.get("category", "UNKNOWN")
-        category, subcategory = _classify_by_content(prompt)
+        category, subcategory = _SOURCE_MAP.get(
+            source_cat, (AttackCategory.INSTRUCTION_OVERRIDE, "ignore_previous")
+        )
+
+        # Content-based refinement: override source when content clearly contradicts
+        subcategory = _refine_subcategory(prompt, category, subcategory)
         severity = _estimate_severity(prompt, category)
-        layers = _estimate_layers(prompt, category)
 
         return TestScenario(
             id=f"ent_{index:05d}",
@@ -142,70 +118,49 @@ class EnterpriseImporter(BaseImporter):
             user_input=prompt,
             expected_verdict=Verdict.BLOCK,
             expected_severity=severity,
-            expected_triggered_layers=layers,
+            expected_triggered_layers=[],
             tier=Tier.COVERAGE,
             source=f"enterprise/{source_cat}",
         )
 
 
-def _classify_by_content(text: str) -> tuple[AttackCategory, str]:
-    """Classify based on actual prompt content, not source label."""
+def _refine_subcategory(text: str, category: AttackCategory, default: str) -> str:
+    """Refine subcategory using content when it adds precision."""
     text_lower = text.lower()
 
-    if any(kw in text_lower for kw in _ROLEPLAY_KW):
-        return AttackCategory.SEMANTIC_EVASION, "roleplay"
+    if category == AttackCategory.SEMANTIC_EVASION:
+        if any(kw in text_lower for kw in ("pretend", "act as", "you are now", "character")):
+            return "roleplay"
+        if any(kw in text_lower for kw in ("research", "audit", "educational")):
+            return "research_pretext"
+        if any(kw in text_lower for kw in ("ignore", "disregard", "forget")):
+            return "roleplay"  # jailbreak framing is still roleplay-adjacent
+        return default
 
-    if any(kw in text_lower for kw in _EXFIL_KW):
-        return AttackCategory.DATA_EXFILTRATION, "reveal_secrets"
+    if category == AttackCategory.INSTRUCTION_OVERRIDE:
+        if any(kw in text_lower for kw in ("admin", "sudo", "root", "developer mode")):
+            return "act_as_admin"
+        if any(kw in text_lower for kw in ("system prompt", "reveal", "show your")):
+            return "reveal_system_prompt"
+        return default
 
-    if any(kw in text_lower for kw in _OVERRIDE_KW):
-        return AttackCategory.INSTRUCTION_OVERRIDE, "ignore_previous"
-
-    if any(kw in text_lower for kw in _OBFUSCATION_KW):
-        return AttackCategory.OBFUSCATION, "code_wrapped"
-
-    if any(kw in text_lower for kw in ("select * from", "drop table", "; rm -", "import os")):
-        return AttackCategory.TOOL_AGENT_ABUSE, "command_execution"
-
-    return AttackCategory.INSTRUCTION_OVERRIDE, "ignore_previous"
+    return default
 
 
 def _estimate_severity(text: str, category: AttackCategory) -> int:
-    """Estimate severity based on content aggressiveness."""
+    """Estimate severity from content."""
     text_lower = text.lower()
 
     if any(kw in text_lower for kw in ("api key", "password", "credential", "drop table")):
         return 5
-    if any(kw in text_lower for kw in ("ignore all", "disregard all", "override all")):
+    if any(kw in text_lower for kw in ("ignore all", "disregard all")):
         return 5
+    if category == AttackCategory.DATA_EXFILTRATION:
+        return 5
+    if category == AttackCategory.OBFUSCATION:
+        return 4
     if category == AttackCategory.SEMANTIC_EVASION:
         return 4
-    if category == AttackCategory.OBFUSCATION:
-        return 3
+    if category == AttackCategory.CONTEXT_INCONSISTENCY:
+        return 4
     return 4
-
-
-def _estimate_layers(text: str, category: AttackCategory) -> list[str]:
-    """Estimate which detection layers should trigger based on content."""
-    text_lower = text.lower()
-    layers = []
-
-    if any(
-        kw in text_lower for kw in ("ignore", "disregard", "override", "jailbreak", "system prompt")
-    ):
-        layers.append("heuristics")
-
-    if category in (
-        AttackCategory.SEMANTIC_EVASION,
-        AttackCategory.DATA_EXFILTRATION,
-        AttackCategory.CONTEXT_INCONSISTENCY,
-    ):
-        layers.append("semantic")
-
-    if category in (AttackCategory.OBFUSCATION, AttackCategory.SEMANTIC_EVASION):
-        layers.append("llm_guard")
-
-    if not layers:
-        layers = ["heuristics", "semantic"]
-
-    return layers
