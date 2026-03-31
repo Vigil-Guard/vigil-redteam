@@ -26,6 +26,12 @@ def main() -> None:
 @click.option("--category", default=None, help="Comma-separated attack categories to include")
 @click.option("--channel", default=None, help="Comma-separated channels to include")
 @click.option("--language", default=None, help="Comma-separated languages to include")
+@click.option(
+    "--mode",
+    default=None,
+    type=click.Choice(["single_turn", "contextual"]),
+    help="Filter by context mode (single_turn = arbiter gate, contextual = diagnostic)",
+)
 @click.option("--concurrency", default=None, type=int, help="Override concurrency from config")
 @click.option("--limit", default=None, type=int, help="Max scenarios to run")
 @click.option("--config", "config_path", default=None, type=click.Path(exists=True))
@@ -35,6 +41,7 @@ def run(
     category: str | None,
     channel: str | None,
     language: str | None,
+    mode: str | None,
     concurrency: int | None,
     limit: int | None,
     config_path: str | None,
@@ -55,6 +62,7 @@ def run(
     categories = category.split(",") if category else None
     channels = channel.split(",") if channel else None
     languages = language.split(",") if language else None
+    context_modes = [mode] if mode else None
 
     results = execute_run(
         cfg,
@@ -62,6 +70,7 @@ def run(
         categories=categories,
         channels=channels,
         languages=languages,
+        context_modes=context_modes,
         limit=limit,
     )
 

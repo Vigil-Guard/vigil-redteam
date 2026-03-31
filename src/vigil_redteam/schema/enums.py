@@ -50,6 +50,11 @@ class FailureType(StrEnum):
     LATENCY_REGRESSION = "latency_regression"
 
 
+class ContextMode(StrEnum):
+    SINGLE_TURN = "single_turn"
+    CONTEXTUAL = "contextual"
+
+
 class DetectionLayer(StrEnum):
     HEURISTICS = "heuristics"
     SEMANTIC = "semantic"

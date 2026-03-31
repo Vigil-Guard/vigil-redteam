@@ -7,7 +7,7 @@ import random
 from pathlib import Path
 
 from vigil_redteam.importers.base import BaseImporter
-from vigil_redteam.schema.enums import AttackCategory, Channel, Tier, Verdict
+from vigil_redteam.schema.enums import AttackCategory, Channel, ContextMode, Tier, Verdict
 from vigil_redteam.schema.scenario import TestScenario
 
 
@@ -85,6 +85,7 @@ class SystemChatImporter(BaseImporter):
             channel=Channel.CHAT,
             user_input=full_conversation,
             system_context=system_context,
+            context_mode=ContextMode.CONTEXTUAL,
             expected_verdict=Verdict.ALLOW,
             expected_severity=0,
             expected_triggered_layers=[],

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from vigil_redteam.schema.enums import AttackCategory, Channel, Tier, Verdict
+from vigil_redteam.schema.enums import AttackCategory, Channel, ContextMode, Tier, Verdict
 
 
 class TestScenario(BaseModel):
@@ -15,6 +15,13 @@ class TestScenario(BaseModel):
 
     Only `user_input` is sent to VGE API as the `prompt` field.
     All other fields are metadata for filtering, grouping, and reporting.
+
+    context_mode:
+      - single_turn: verdict is determinable from user_input alone.
+        These scenarios are valid for arbiter calibration.
+      - contextual: verdict depends on system_context, external_context,
+        or conversation state that VGE API cannot receive.
+        These scenarios are diagnostic only — not valid as arbiter gate.
     """
 
     id: str
@@ -25,6 +32,7 @@ class TestScenario(BaseModel):
     user_input: str = Field(min_length=1)
     external_context: str | None = None
     system_context: str | None = None
+    context_mode: ContextMode = ContextMode.SINGLE_TURN
     expected_verdict: Verdict
     expected_severity: int = Field(ge=0, le=5)
     expected_triggered_layers: list[str] = Field(default_factory=list)

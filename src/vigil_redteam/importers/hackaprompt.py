@@ -6,8 +6,24 @@ import random
 from pathlib import Path
 
 from vigil_redteam.importers.base import BaseImporter
-from vigil_redteam.schema.enums import AttackCategory, Channel, Tier, Verdict
+from vigil_redteam.schema.enums import AttackCategory, Channel, ContextMode, Tier, Verdict
 from vigil_redteam.schema.scenario import TestScenario
+
+_INJECTION_KW = (
+    "ignore",
+    "disregard",
+    "forget",
+    "override",
+    "bypass",
+    "pwned",
+    "new instructions",
+    "pretend",
+    "act as",
+    "you are now",
+    "system prompt",
+    "previous instructions",
+    "do not follow",
+)
 
 
 class HackAPromptImporter(BaseImporter):
@@ -79,6 +95,13 @@ class HackAPromptImporter(BaseImporter):
         category = _level_to_category(level)
         subcategory = _level_to_subcategory(level)
 
+        # Most HackAPrompt attacks contain explicit injection signals detectable
+        # without challenge context. Mark as contextual only if user_input has
+        # no recognizable injection keywords.
+        text_lower = user_input.lower()
+        has_signal = any(kw in text_lower for kw in _INJECTION_KW)
+        context_mode = ContextMode.SINGLE_TURN if has_signal else ContextMode.CONTEXTUAL
+
         return TestScenario(
             id=f"hap_{index:05d}",
             category=category,
@@ -87,6 +110,7 @@ class HackAPromptImporter(BaseImporter):
             channel=Channel.CHAT,
             user_input=user_input,
             system_context=prompt[:500] if prompt else None,
+            context_mode=context_mode,
             expected_verdict=Verdict.BLOCK,
             expected_severity=severity,
             expected_triggered_layers=[],

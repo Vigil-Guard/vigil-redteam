@@ -13,6 +13,7 @@ def filter_scenarios(
     languages: list[str] | None = None,
     tiers: list[str] | None = None,
     subcategories: list[str] | None = None,
+    context_modes: list[str] | None = None,
 ) -> list[TestScenario]:
     """Return scenarios matching all provided filters (AND logic)."""
     filtered = scenarios
@@ -36,5 +37,9 @@ def filter_scenarios(
     if subcategories:
         sub_set = set(subcategories)
         filtered = [s for s in filtered if s.subcategory in sub_set]
+
+    if context_modes:
+        mode_set = set(context_modes)
+        filtered = [s for s in filtered if s.context_mode in mode_set]
 
     return filtered

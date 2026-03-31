@@ -21,6 +21,7 @@ def execute_run(
     categories: list[str] | None = None,
     channels: list[str] | None = None,
     languages: list[str] | None = None,
+    context_modes: list[str] | None = None,
     limit: int | None = None,
 ) -> list[TestResult]:
     """Load scenarios, filter, and execute against VGE API.
@@ -29,7 +30,11 @@ def execute_run(
     """
     scenarios = load_scenarios_from_dir(dataset_dir)
     scenarios = filter_scenarios(
-        scenarios, categories=categories, channels=channels, languages=languages
+        scenarios,
+        categories=categories,
+        channels=channels,
+        languages=languages,
+        context_modes=context_modes,
     )
 
     if limit and limit < len(scenarios):

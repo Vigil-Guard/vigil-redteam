@@ -51,10 +51,19 @@ class RunReport(BaseModel):
     robustness: MetricGroup = MetricGroup()
     pipeline: MetricGroup = MetricGroup()
 
+    # Context mode split (single_turn is arbiter gate, contextual is diagnostic)
+    single_turn_security: MetricGroup = MetricGroup()
+    single_turn_usability: MetricGroup = MetricGroup()
+    contextual_security: MetricGroup = MetricGroup()
+    contextual_usability: MetricGroup = MetricGroup()
+    single_turn_count: int = 0
+    contextual_count: int = 0
+
     # Breakdowns
     by_category: SliceMetrics = SliceMetrics(dimension="category")
     by_language: SliceMetrics = SliceMetrics(dimension="language")
     by_channel: SliceMetrics = SliceMetrics(dimension="channel")
+    by_source: SliceMetrics = SliceMetrics(dimension="source")
     by_mutation_family: SliceMetrics = SliceMetrics(dimension="mutation_family")
 
     # Failure analysis

@@ -1,4 +1,13 @@
-"""Import SPML dataset — system prompt + user prompt pairs with injection degree."""
+"""Import SPML dataset — system prompt + user prompt pairs with injection degree.
+
+Context mode logic:
+- Degree 0 (benign): single_turn — text is self-evidently benign
+- Degree 5/7/10 with explicit injection keywords: single_turn — attack signal
+  is in user_input itself ("ignore", "disregard", etc.)
+- Degree 3/4 or attacks without explicit keywords: contextual — the attack is
+  injecting a competing system prompt, which looks benign without knowing the
+  target system prompt context
+"""
 
 from __future__ import annotations
 
@@ -7,7 +16,7 @@ import random
 from pathlib import Path
 
 from vigil_redteam.importers.base import BaseImporter
-from vigil_redteam.schema.enums import AttackCategory, Channel, Tier, Verdict
+from vigil_redteam.schema.enums import AttackCategory, Channel, ContextMode, Tier, Verdict
 from vigil_redteam.schema.scenario import TestScenario
 
 _DEGREE_TO_SEVERITY = {
@@ -43,17 +52,33 @@ _DEGREE_TO_SUBCATEGORY = {
     "10": "ignore_previous",
 }
 
+_EXPLICIT_INJECTION_KW = (
+    "ignore",
+    "disregard",
+    "forget",
+    "override",
+    "bypass",
+    "new instructions",
+    "do not follow",
+    "do not listen",
+    "reveal",
+    "show me your prompt",
+    "print your",
+    "jailbreak",
+    "pretend you are",
+)
+
 
 class SPMLImporter(BaseImporter):
     """Import SPML CSV with stratified sampling by injection degree."""
 
     def __init__(self, budget: dict[str, int] | None = None):
         self._budget = budget or {
-            "0": 150,  # benign
+            "0": 150,
             "3": 50,
-            "4": 50,  # subtle attacks
+            "4": 50,
             "5": 75,
-            "7": 75,  # strong attacks
+            "7": 75,
         }
 
     def import_records(self, input_path: Path) -> list[TestScenario]:
@@ -95,6 +120,7 @@ class SPMLImporter(BaseImporter):
         subcategory = _DEGREE_TO_SUBCATEGORY.get(degree, "ignore_previous")
         severity = _DEGREE_TO_SEVERITY.get(degree, 3)
         verdict = Verdict.BLOCK if is_injection else Verdict.ALLOW
+        context_mode = _determine_context_mode(user_input, is_injection, degree)
 
         return TestScenario(
             id=f"spml_{index:05d}",
@@ -104,6 +130,7 @@ class SPMLImporter(BaseImporter):
             channel=Channel.CHAT,
             user_input=user_input,
             system_context=system_prompt if system_prompt else None,
+            context_mode=context_mode,
             expected_verdict=verdict,
             expected_severity=severity,
             expected_triggered_layers=[],
@@ -111,3 +138,17 @@ class SPMLImporter(BaseImporter):
             source=f"spml/degree_{degree}",
             notes=f"injection_degree={degree}",
         )
+
+
+def _determine_context_mode(text: str, is_injection: bool, degree: str) -> ContextMode:
+    """Determine if this scenario's verdict is decidable from user_input alone."""
+    if not is_injection:
+        return ContextMode.SINGLE_TURN
+
+    text_lower = text.lower()
+    if any(kw in text_lower for kw in _EXPLICIT_INJECTION_KW):
+        return ContextMode.SINGLE_TURN
+
+    # Competing system prompt injection without explicit keywords —
+    # looks like a legitimate system prompt, only malicious in context
+    return ContextMode.CONTEXTUAL

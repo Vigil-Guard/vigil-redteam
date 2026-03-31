@@ -18,6 +18,7 @@ from vigil_redteam.metrics.security import (
     compute_security_metrics,
 )
 from vigil_redteam.metrics.usability import compute_usability_metrics
+from vigil_redteam.schema.enums import ContextMode
 from vigil_redteam.schema.report import (
     FailureCluster,
     MetricGroup,
@@ -44,6 +45,14 @@ def generate_report(
     pipeline = compute_pipeline_metrics(results)
     robustness = compute_mutation_survival_rate(results)
 
+    # Split by context_mode
+    st_results = [r for r in results if r.scenario.context_mode == ContextMode.SINGLE_TURN]
+    ctx_results = [r for r in results if r.scenario.context_mode == ContextMode.CONTEXTUAL]
+
+    # Source-level breakdown
+    def _source_key(r: TestResult) -> str:
+        return r.scenario.source.split("/")[0]
+
     return RunReport(
         run_id=str(uuid.uuid4())[:8],
         timestamp=datetime.now(UTC),
@@ -58,9 +67,18 @@ def generate_report(
         usability=MetricGroup(metrics=usability),
         pipeline=MetricGroup(metrics=pipeline),
         robustness=MetricGroup(metrics=robustness),
+        # Context mode split
+        single_turn_security=MetricGroup(metrics=compute_security_metrics(st_results)),
+        single_turn_usability=MetricGroup(metrics=compute_usability_metrics(st_results)),
+        contextual_security=MetricGroup(metrics=compute_security_metrics(ctx_results)),
+        contextual_usability=MetricGroup(metrics=compute_usability_metrics(ctx_results)),
+        single_turn_count=len(st_results),
+        contextual_count=len(ctx_results),
+        # Breakdowns
         by_category=_build_slice("category", compute_recall_per_category(results)),
         by_language=_build_slice("language", compute_recall_per_dimension(results, "language")),
         by_channel=_build_slice("channel", compute_recall_per_dimension(results, "channel")),
+        by_source=_build_slice("source", _compute_source_breakdown(results)),
         by_mutation_family=_build_slice(
             "mutation_family", compute_recall_per_dimension(results, "mutation_family")
         ),
@@ -75,6 +93,38 @@ def _build_slice(dimension: str, data: dict[str, dict]) -> SliceMetrics:
     for key, metrics in data.items():
         slices[key] = MetricGroup(metrics=metrics)
     return SliceMetrics(dimension=dimension, slices=slices)
+
+
+def _compute_source_breakdown(results: list[TestResult]) -> dict[str, dict[str, float | int]]:
+    """Recall + FPR per source dataset."""
+    from vigil_redteam.schema.enums import Verdict
+    from vigil_redteam.taxonomy.attacks import is_benign_category
+
+    by_source: dict[str, list[TestResult]] = defaultdict(list)
+    for r in results:
+        if r.error is not None:
+            continue
+        key = r.scenario.source.split("/")[0]
+        by_source[key].append(r)
+
+    out = {}
+    for src, src_results in sorted(by_source.items()):
+        attacks = [r for r in src_results if not is_benign_category(r.scenario.category)]
+        benigns = [r for r in src_results if is_benign_category(r.scenario.category)]
+
+        detected = sum(1 for r in attacks if r.actual_verdict == Verdict.BLOCK) if attacks else 0
+        fp = sum(1 for r in benigns if r.actual_verdict == Verdict.BLOCK) if benigns else 0
+
+        out[src] = {
+            "total": len(src_results),
+            "attacks": len(attacks),
+            "benigns": len(benigns),
+            "detected": detected,
+            "recall": detected / len(attacks) if attacks else None,
+            "fp": fp,
+            "fpr": fp / len(benigns) if benigns else None,
+        }
+    return out
 
 
 def _build_failure_clusters(results: list[TestResult]) -> list[FailureCluster]:

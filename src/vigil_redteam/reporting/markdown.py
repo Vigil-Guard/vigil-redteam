@@ -6,7 +6,7 @@ from vigil_redteam.schema.report import RunReport
 
 
 def render_markdown(report: RunReport) -> str:
-    """Render a full markdown report."""
+    """Render a full markdown report with single_turn/contextual split."""
     lines: list[str] = []
     _w = lines.append
 
@@ -18,32 +18,64 @@ def render_markdown(report: RunReport) -> str:
     _w(f"**Threshold:** {report.threshold}")
     _w("")
 
-    # Executive Summary
+    # Context mode warning
+    if report.contextual_count > 0:
+        _w("> **Note:** This run includes contextual scenarios whose verdict depends on")
+        _w("> system_context or conversation state that VGE API cannot receive.")
+        _w("> **Only single_turn metrics are valid for arbiter calibration.**")
+        _w("> Contextual metrics are diagnostic only.")
+        _w("")
+
+    # 1. Executive Summary — split view
     _w("## 1. Executive Summary")
     _w("")
-    _w("| Metric | Value |")
-    _w("|--------|-------|")
-    _w(f"| Total scenarios | {report.total_scenarios} |")
-    _w(f"| Passed | {report.passed} |")
-    _w(f"| Failed | {report.failed} |")
-    _w(f"| Errors | {report.errors} |")
+    _w("| Metric | Overall | Single-turn (arbiter gate) | Contextual (diagnostic) |")
+    _w("|--------|---------|---------------------------|------------------------|")
+    _w(
+        f"| Scenarios | {report.total_scenarios} | {report.single_turn_count} | {report.contextual_count} |"
+    )
 
     sec = report.security.metrics
-    _w(f"| Attack recall | {_fmt_pct(sec.get('attack_recall'))} |")
-    _w(f"| Bypass rate | {_fmt_pct(sec.get('bypass_rate'))} |")
+    st_sec = report.single_turn_security.metrics
+    ctx_sec = report.contextual_security.metrics
+    _w(
+        f"| Attack recall | {_fmt_pct(sec.get('attack_recall'))} | {_fmt_pct(st_sec.get('attack_recall'))} | {_fmt_pct(ctx_sec.get('attack_recall'))} |"
+    )
+    _w(
+        f"| Bypass rate | {_fmt_pct(sec.get('bypass_rate'))} | {_fmt_pct(st_sec.get('bypass_rate'))} | {_fmt_pct(ctx_sec.get('bypass_rate'))} |"
+    )
 
     usa = report.usability.metrics
-    _w(f"| FPR | {_fmt_pct(usa.get('fpr'))} |")
-    _w(f"| Precision | {_fmt_pct(usa.get('precision'))} |")
+    st_usa = report.single_turn_usability.metrics
+    ctx_usa = report.contextual_usability.metrics
+    _w(
+        f"| FPR | {_fmt_pct(usa.get('fpr'))} | {_fmt_pct(st_usa.get('fpr'))} | {_fmt_pct(ctx_usa.get('fpr'))} |"
+    )
+    _w(
+        f"| Precision | {_fmt_pct(usa.get('precision'))} | {_fmt_pct(st_usa.get('precision'))} | {_fmt_pct(ctx_usa.get('precision'))} |"
+    )
 
     pip = report.pipeline.metrics
-    _w(f"| Avg latency | {_fmt_ms(pip.get('avg_latency_ms'))} |")
-    _w(f"| P95 latency | {_fmt_ms(pip.get('p95_latency_ms'))} |")
-    _w(f"| Unsafe pass severity | {_fmt_float(pip.get('unsafe_pass_severity'))} |")
+    _w(f"| Avg latency | {_fmt_ms(pip.get('avg_latency_ms'))} | — | — |")
+    _w(f"| P95 latency | {_fmt_ms(pip.get('p95_latency_ms'))} | — | — |")
+    _w(f"| Unsafe pass severity | {_fmt_float(pip.get('unsafe_pass_severity'))} | — | — |")
     _w("")
 
-    # Category Breakdown
-    _w("## 2. Recall by Category")
+    # 2. By Source
+    _w("## 2. Metrics by Source")
+    _w("")
+    if report.by_source.slices:
+        _w("| Source | Total | Attacks | Recall | Benigns | FPR |")
+        _w("|--------|-------|---------|--------|---------|-----|")
+        for src, mg in report.by_source.slices.items():
+            m = mg.metrics
+            _w(
+                f"| {src} | {m.get('total', 0)} | {m.get('attacks', 0)} | {_fmt_pct(m.get('recall'))} | {m.get('benigns', 0)} | {_fmt_pct(m.get('fpr'))} |"
+            )
+    _w("")
+
+    # 3. Recall by Category
+    _w("## 3. Recall by Category")
     _w("")
     if report.by_category.slices:
         _w("| Category | Count | Detected | Recall |")
@@ -55,8 +87,8 @@ def render_markdown(report: RunReport) -> str:
             )
     _w("")
 
-    # Language Breakdown
-    _w("## 3. Recall by Language")
+    # 4. Recall by Language
+    _w("## 4. Recall by Language")
     _w("")
     if report.by_language.slices:
         _w("| Language | Count | Detected | Recall |")
@@ -68,20 +100,7 @@ def render_markdown(report: RunReport) -> str:
             )
     _w("")
 
-    # Channel Breakdown
-    _w("## 4. Recall by Channel")
-    _w("")
-    if report.by_channel.slices:
-        _w("| Channel | Count | Detected | Recall |")
-        _w("|---------|-------|----------|--------|")
-        for ch, mg in report.by_channel.slices.items():
-            m = mg.metrics
-            _w(
-                f"| {ch} | {m.get('count', 0)} | {m.get('detected', 0)} | {_fmt_pct(m.get('recall'))} |"
-            )
-    _w("")
-
-    # Failure Clusters
+    # 5. Failure Clusters
     _w("## 5. Failure Clusters")
     _w("")
     if report.failure_clusters:
@@ -94,25 +113,15 @@ def render_markdown(report: RunReport) -> str:
         _w("No failures detected.")
     _w("")
 
-    # Layer Analysis
+    # 6. Layer Analysis
     _w("## 6. Layer Analysis")
     _w("")
-    _w("### Layer Coverage (trigger count)")
-    _w("")
     if report.layer_coverage:
-        _w("| Layer | Triggers |")
-        _w("|-------|----------|")
+        _w("| Layer | Triggers | First catch |")
+        _w("|-------|----------|-------------|")
         for layer, count in sorted(report.layer_coverage.items(), key=lambda x: -x[1]):
-            _w(f"| {layer} | {count} |")
-    _w("")
-
-    _w("### First Catching Layer (for detected attacks)")
-    _w("")
-    if report.first_catching_layer:
-        _w("| Layer | First catch count |")
-        _w("|-------|-------------------|")
-        for layer, count in sorted(report.first_catching_layer.items(), key=lambda x: -x[1]):
-            _w(f"| {layer} | {count} |")
+            first = report.first_catching_layer.get(layer, 0)
+            _w(f"| {layer} | {count} | {first} |")
     _w("")
 
     return "\n".join(lines)
