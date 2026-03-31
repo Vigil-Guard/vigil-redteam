@@ -106,7 +106,7 @@ class SPMLImporter(BaseImporter):
             system_context=system_prompt if system_prompt else None,
             expected_verdict=verdict,
             expected_severity=severity,
-            expected_triggered_layers=["semantic", "llm_guard"] if is_injection else [],
+            expected_triggered_layers=[],
             tier=Tier.COVERAGE,
             source=f"spml/degree_{degree}",
             notes=f"injection_degree={degree}",

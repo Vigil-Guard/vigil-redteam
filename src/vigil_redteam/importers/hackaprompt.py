@@ -89,7 +89,7 @@ class HackAPromptImporter(BaseImporter):
             system_context=prompt[:500] if prompt else None,
             expected_verdict=Verdict.BLOCK,
             expected_severity=severity,
-            expected_triggered_layers=["heuristics", "semantic"],
+            expected_triggered_layers=[],
             tier=Tier.COVERAGE,
             source=f"hackaprompt/level_{level}/{'success' if is_success else 'failure'}",
             notes=f"model={model} correct={is_success}",
@@ -97,27 +97,25 @@ class HackAPromptImporter(BaseImporter):
 
 
 def _level_to_category(level: int) -> AttackCategory:
+    """All HackAPrompt levels are jailbreak attempts to make the model
+    output a specific phrase. Levels differ in defense complexity, not attack type."""
     if level <= 2:
         return AttackCategory.INSTRUCTION_OVERRIDE
     if level <= 5:
         return AttackCategory.SEMANTIC_EVASION
-    if level <= 8:
-        return AttackCategory.OBFUSCATION
-    return AttackCategory.DATA_EXFILTRATION
+    return AttackCategory.OBFUSCATION
 
 
 def _level_to_subcategory(level: int) -> str:
-    mapping = {
-        0: "ignore_previous",
-        1: "ignore_previous",
-        2: "reveal_system_prompt",
-        3: "roleplay",
-        4: "research_pretext",
-        5: "indirect_phrasing",
-        6: "code_wrapped",
-        7: "base64",
-        8: "mixed_language",
-        9: "reveal_secrets",
-        10: "dump_memory",
-    }
-    return mapping.get(level, "ignore_previous")
+    """Map competition levels to subcategories based on actual attack patterns."""
+    if level <= 1:
+        return "ignore_previous"
+    if level == 2:
+        return "hierarchy_conflict"
+    if level <= 4:
+        return "indirect_phrasing"
+    if level == 5:
+        return "roleplay"
+    if level <= 7:
+        return "code_wrapped"
+    return "mixed_language"

@@ -32,7 +32,7 @@ class SystemChatImporter(BaseImporter):
                     continue
 
                 convs = record.get("conversations", [])
-                if len(convs) >= self._min_turns:
+                if len(convs) >= self._min_turns and _is_realistic(convs):
                     candidates.append(convs)
 
         random.seed(42)
@@ -92,6 +92,40 @@ class SystemChatImporter(BaseImporter):
             source="systemchat",
             notes=f"turns={len([t for t in full_conversation.split('[USER]') if t.strip()])}",
         )
+
+
+_DEGENERATE_PATTERNS = (
+    "always refuse",
+    "always respond with",
+    "only respond with",
+    "respond only with the word",
+    "never provide",
+    "you must always say",
+    "sexual",
+    "erotic",
+    "nsfw",
+    "dominatrix",
+    "seductive",
+    "flirtatious",
+    "ideolog",
+    "marxist",
+    "fascist",
+    "supremacist",
+)
+
+
+def _is_realistic(convs: list[dict]) -> bool:
+    """Filter out degenerate, unrealistic, or inappropriate conversations."""
+    for turn in convs:
+        if turn.get("from") != "system":
+            continue
+        sys_text = turn.get("value", "").lower()
+        if any(pat in sys_text for pat in _DEGENERATE_PATTERNS):
+            return False
+        # Very short system prompts are usually degenerate
+        if len(sys_text.strip()) < 20:
+            return False
+    return True
 
 
 def _guess_benign_subcategory(system_context: str) -> str:
