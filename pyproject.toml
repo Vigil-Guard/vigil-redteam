@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "vigil-redteam"
 version = "0.1.0"
-description = "Adversarial testing framework for Vigil Guard Enterprise"
+description = "Open adversarial benchmark for prompt injection detection systems"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"

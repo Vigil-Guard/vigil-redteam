@@ -1,6 +1,6 @@
 # vigil-redteam
 
-Open adversarial benchmark for prompt injection detection systems. Built for [Vigil Guard Enterprise](https://vigilguard.ai) but applicable to any guardrail API that accepts text input and returns a block/allow decision.
+Open adversarial benchmark for prompt injection detection systems. Works with any guardrail API that accepts text input and returns a block/allow decision. A reference client for [Vigil Guard Enterprise](https://vigilguard.ai) ships in the box; adapters for other systems are a ~100-line HTTP wrapper.
 
 ## What this is
 
@@ -89,13 +89,13 @@ Any guardrail system with an HTTP API that:
 - Accepts a POST request with a text prompt
 - Returns a block/allow decision with a numeric score
 
-The default target is Vigil Guard Enterprise (`POST /v1/guard/input`), but the client can be adapted for other systems.
+The bundled client targets Vigil Guard Enterprise (`POST /v1/guard/input`). To point the benchmark at a different system, drop in a new client under `src/vigil_redteam/client/` implementing the same `detect(prompt) -> DetectionResponse` contract — see `client/vge.py` as a reference (~140 lines including response parsing and retry).
 
 ### Environment
 
 ```bash
-export VGE_API_KEY="your_api_key"
-export VIGIL_SKIP_TLS_VERIFY=1    # if using self-signed TLS
+export VGE_API_KEY="your_api_key"     # bearer token for the bundled VGE client
+export VIGIL_SKIP_TLS_VERIFY=1        # optional, for self-signed TLS
 ```
 
 ### Execute
@@ -273,7 +273,7 @@ Each test scenario is a single JSON line:
 }
 ```
 
-Only `user_input` is sent to the VGE API as the `prompt` field. All other fields are metadata for filtering, grouping, and reporting.
+Only `user_input` is sent to the guardrail API as the `prompt` field. All other fields are metadata for filtering, grouping, and reporting.
 
 ## Configuration
 
@@ -281,8 +281,8 @@ Only `user_input` is sent to the VGE API as the `prompt` field. All other fields
 
 ```toml
 [api]
-base_url = "https://api.vigilguard"
-verify_tls = false
+base_url = "https://your-guardrail.example.com"
+verify_tls = true
 timeout = 30
 
 [runner]

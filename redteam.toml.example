@@ -1,6 +1,6 @@
 [api]
-base_url = "https://api.vigilguard"
-verify_tls = false
+base_url = "https://your-guardrail.example.com"
+verify_tls = true
 timeout = 30
 
 [runner]
