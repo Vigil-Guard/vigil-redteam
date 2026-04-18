@@ -249,6 +249,32 @@ vigil-redteam validate datasets/golden/
 vigil-redteam validate datasets/coverage/
 ```
 
+## Experimental: Agent Metadata Pack
+
+Scenarios may carry an optional `metadata` envelope that the runner forwards as
+`metadata` on `POST /v1/guard/input`. This exists for manual validation of
+agent-context logging paths on the target system (e.g. VGE PRD_28) — the runner
+does not inspect logs itself.
+
+Status: **experimental**. Operator verifies the outcome in the target system's
+investigation UI.
+
+```bash
+vigil-redteam validate datasets/experimental/agent_context/
+vigil-redteam run --dataset datasets/experimental/agent_context --concurrency 4 \
+  --config redteam.toml.example
+```
+
+The shipped pack `datasets/experimental/agent_context/benign_agent_context_pl.jsonl`
+contains 10 benign Polish prompts. Fields such as `toolName`, `toolUseId`,
+`mcpServer`, and `hookEvent` are **synthetic** in this iteration — they do not
+come from a real agent runtime, only from the dataset, so the logging path can
+be exercised end-to-end. Stable envelope fields (`sessionId`, `decisionSource`,
+`agentPlatform`, `agentVersion`) identify the run as redteam-generated traffic.
+
+Scenarios without a `metadata` field behave exactly as before; baseline runs
+stay byte-identical.
+
 ## JSONL Schema
 
 Each test scenario is a single JSON line:
@@ -269,11 +295,12 @@ Each test scenario is a single JSON line:
   "mutation_family": "literal",
   "tier": "golden",
   "source": "manual_redteam_v1",
-  "notes": ""
+  "notes": "",
+  "metadata": null
 }
 ```
 
-Only `user_input` is sent to the guardrail API as the `prompt` field. All other fields are metadata for filtering, grouping, and reporting.
+Only `user_input` is sent to the guardrail API as the `prompt` field. All other fields are metadata for filtering, grouping, and reporting. The optional `metadata` object, when present, is forwarded to the guardrail API as the request-level `metadata` envelope (experimental; see above).
 
 ## Configuration
 
