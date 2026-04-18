@@ -69,12 +69,23 @@ class VGEClient:
             },
         )
 
-    def detect(self, prompt: str) -> DetectionResponse:
-        """Send prompt to /v1/guard/input and return parsed response."""
+    def detect(
+        self,
+        prompt: str,
+        metadata: dict[str, str | int | float | bool] | None = None,
+    ) -> DetectionResponse:
+        """Send prompt to /v1/guard/input and return parsed response.
+
+        `metadata` is an optional experimental envelope used for manual validation
+        of agent context logging (PRD_28). When None or empty, no `metadata` key is
+        included in the payload, so baseline runs stay byte-identical.
+        """
         self._rate_limiter.wait()
 
         url = f"{self._base_url}/v1/guard/input"
-        payload = {"prompt": prompt}
+        payload: dict[str, object] = {"prompt": prompt}
+        if metadata:
+            payload["metadata"] = metadata
 
         last_error: Exception | None = None
         for attempt in range(1 + self._retries):

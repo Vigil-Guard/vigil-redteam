@@ -40,6 +40,13 @@ class TestScenario(BaseModel):
     tier: Tier
     source: str
     notes: str = ""
+    metadata: dict[str, str | int | float | bool] | None = Field(
+        default=None,
+        description=(
+            "Optional API metadata envelope sent as POST /v1/guard/input `metadata`. "
+            "Experimental; used for manual validation of agent context logging (PRD_28)."
+        ),
+    )
 
     model_config = {"extra": "ignore"}
 
