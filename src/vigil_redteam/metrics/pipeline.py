@@ -10,6 +10,8 @@ from vigil_redteam.taxonomy.attacks import is_benign_category
 
 # Score threshold above which a layer is considered "triggered"
 _LAYER_TRIGGER_THRESHOLD = 30
+# scope_drift uses a 0-1 score, unlike the other branches which use 0-100.
+_SCOPE_DRIFT_TRIGGER_THRESHOLD = 0.30
 
 
 def compute_pipeline_metrics(results: list[TestResult]) -> dict[str, float | int | None]:
@@ -50,14 +52,19 @@ def compute_layer_coverage(results: list[TestResult]) -> dict[str, int]:
         if r.error is not None:
             continue
         bs = r.branch_scores
-        if bs.heuristics is not None and bs.heuristics >= _LAYER_TRIGGER_THRESHOLD:
+        if bs.heuristics.score is not None and bs.heuristics.score >= _LAYER_TRIGGER_THRESHOLD:
             counts["heuristics"] += 1
-        if bs.semantic is not None and bs.semantic >= _LAYER_TRIGGER_THRESHOLD:
+        if bs.semantic.score is not None and bs.semantic.score >= _LAYER_TRIGGER_THRESHOLD:
             counts["semantic"] += 1
-        if bs.llm_guard is not None and bs.llm_guard >= _LAYER_TRIGGER_THRESHOLD:
+        if bs.llm_guard.score is not None and bs.llm_guard.score >= _LAYER_TRIGGER_THRESHOLD:
             counts["llm_guard"] += 1
-        if bs.content_mod is not None and bs.content_mod >= _LAYER_TRIGGER_THRESHOLD:
+        if bs.content_mod.score is not None and bs.content_mod.score >= _LAYER_TRIGGER_THRESHOLD:
             counts["content_mod"] += 1
+        if (
+            bs.scope_drift.drift_score is not None
+            and bs.scope_drift.drift_score >= _SCOPE_DRIFT_TRIGGER_THRESHOLD
+        ):
+            counts["scope_drift"] += 1
     return dict(counts)
 
 
@@ -73,20 +80,27 @@ def compute_first_catching_layer(results: list[TestResult]) -> dict[str, int]:
 
         bs = r.branch_scores
         scores = {}
-        if bs.heuristics is not None:
-            scores["heuristics"] = bs.heuristics
-        if bs.semantic is not None:
-            scores["semantic"] = bs.semantic
-        if bs.llm_guard is not None:
-            scores["llm_guard"] = bs.llm_guard
-        if bs.content_mod is not None:
-            scores["content_mod"] = bs.content_mod
+        if bs.heuristics.score is not None:
+            scores["heuristics"] = bs.heuristics.score
+        if bs.semantic.score is not None:
+            scores["semantic"] = bs.semantic.score
+        if bs.llm_guard.score is not None:
+            scores["llm_guard"] = bs.llm_guard.score
+        if bs.content_mod.score is not None:
+            scores["content_mod"] = bs.content_mod.score
+        if bs.scope_drift.drift_score is not None:
+            scores["scope_drift"] = _normalize_scope_drift_score(bs.scope_drift.drift_score)
 
         if scores:
             top_layer = max(scores, key=lambda k: scores[k])
             first_catcher[top_layer] += 1
 
     return dict(first_catcher)
+
+
+def _normalize_scope_drift_score(score: float) -> float:
+    """Normalize scope_drift score to the 0-100 scale used by other branches."""
+    return score * 100.0
 
 
 def _percentile(values: list[float], pct: float) -> float:

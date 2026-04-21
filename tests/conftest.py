@@ -11,7 +11,13 @@ from vigil_redteam.schema.enums import (
     Tier,
     Verdict,
 )
-from vigil_redteam.schema.result import BranchScores, TestResult
+from vigil_redteam.schema.result import (
+    BranchScores,
+    HeuristicsBranch,
+    LlmGuardBranch,
+    SemanticBranch,
+    TestResult,
+)
 from vigil_redteam.schema.scenario import TestScenario
 
 
@@ -58,7 +64,11 @@ def blocked_result(attack_scenario: TestScenario) -> TestResult:
         actual_score=85.0,
         actual_threat_level="HIGH",
         actual_categories=["PROMPT_INJECTION"],
-        branch_scores=BranchScores(heuristics=90, semantic=75, llm_guard=60),
+        branch_scores=BranchScores(
+            heuristics=HeuristicsBranch(score=90),
+            semantic=SemanticBranch(score=75),
+            llm_guard=LlmGuardBranch(score=60),
+        ),
         passed=True,
         latency_ms=120,
     )
@@ -72,7 +82,11 @@ def missed_result(attack_scenario: TestScenario) -> TestResult:
         actual_score=15.0,
         actual_threat_level="LOW",
         actual_categories=["NO_THREATS"],
-        branch_scores=BranchScores(heuristics=10, semantic=15, llm_guard=5),
+        branch_scores=BranchScores(
+            heuristics=HeuristicsBranch(score=10),
+            semantic=SemanticBranch(score=15),
+            llm_guard=LlmGuardBranch(score=5),
+        ),
         passed=False,
         failure_type=FailureType.FN_DIRECT,
         latency_ms=80,
@@ -87,7 +101,11 @@ def fp_result(benign_scenario: TestScenario) -> TestResult:
         actual_score=55.0,
         actual_threat_level="MEDIUM",
         actual_categories=["PROMPT_INJECTION"],
-        branch_scores=BranchScores(heuristics=60, semantic=40, llm_guard=30),
+        branch_scores=BranchScores(
+            heuristics=HeuristicsBranch(score=60),
+            semantic=SemanticBranch(score=40),
+            llm_guard=LlmGuardBranch(score=30),
+        ),
         passed=False,
         failure_type=FailureType.FP_BUSINESS,
         latency_ms=95,

@@ -2,6 +2,11 @@
 
 Uses httpx directly (not the vigil-guard SDK) for maximum control
 over response parsing, branch score extraction, and error handling.
+
+Response Parsing:
+- Branch fields tolerate null values for optional fields (explanations, categories, triggered_categories, enabled, available, explanation).
+- Use branch helper methods for safe defaults: heuristics.get_explanations(), scope_drift.is_enabled(), etc.
+- scope_drift uses 0-1 scale (similarity), while other detectors use 0-100. Metrics reporting normalizes for comparison.
 """
 
 from __future__ import annotations
@@ -13,7 +18,16 @@ from dataclasses import dataclass
 import httpx
 
 from vigil_redteam.config import Config
-from vigil_redteam.schema.result import BranchScores
+from vigil_redteam.schema.result import (
+    BranchScores,
+    ContentModBranch,
+    HeuristicsBranch,
+    LlmGuardBranch,
+    PiiBranch,
+    ScopeDriftBranch,
+    SemanticBranch,
+)
+from vigil_redteam.schema.scenario import ToolContext
 
 
 @dataclass
@@ -73,12 +87,15 @@ class VGEClient:
         self,
         prompt: str,
         metadata: dict[str, str | int | float | bool] | None = None,
+        tool: ToolContext | None = None,
     ) -> DetectionResponse:
         """Send prompt to /v1/guard/input and return parsed response.
 
         `metadata` is an optional experimental envelope used for manual validation
         of agent context logging (PRD_28). When None or empty, no `metadata` key is
         included in the payload, so baseline runs stay byte-identical.
+
+        `tool` is an optional tool invocation context forwarded to VGE API.
         """
         self._rate_limiter.wait()
 
@@ -86,6 +103,22 @@ class VGEClient:
         payload: dict[str, object] = {"prompt": prompt}
         if metadata:
             payload["metadata"] = metadata
+        if tool:
+            tool_data: dict[str, object] = {"name": tool.name}
+            if tool.id is not None:
+                tool_data["id"] = tool.id
+            if tool.vendor is not None:
+                tool_data["vendor"] = tool.vendor
+            if tool.args is not None:
+                tool_data["args"] = tool.args
+            if tool.result is not None:
+                result_data: dict[str, object] = {"content": tool.result.content}
+                if tool.result.is_error is not None:
+                    result_data["isError"] = tool.result.is_error
+                if tool.result.duration_ms is not None:
+                    result_data["durationMs"] = tool.result.duration_ms
+                tool_data["result"] = result_data
+            payload["tool"] = tool_data
 
         last_error: Exception | None = None
         for attempt in range(1 + self._retries):
@@ -113,38 +146,72 @@ class VGEClient:
     def _parse_response(data: dict) -> DetectionResponse:
         branches_raw = data.get("branches", {}) or {}
 
-        heuristics_score = None
-        if h := branches_raw.get("heuristics"):
-            heuristics_score = h.get("score")
+        # Parse heuristics branch
+        raw_h = branches_raw.get("heuristics") or {}
+        heuristics = HeuristicsBranch(
+            score=raw_h.get("score"),
+            threat_level=raw_h.get("threatLevel"),
+            explanations=raw_h.get("explanations"),
+        )
 
-        semantic_score = None
-        if s := branches_raw.get("semantic"):
-            semantic_score = s.get("score")
+        # Parse semantic branch
+        raw_s = branches_raw.get("semantic") or {}
+        semantic = SemanticBranch(
+            score=raw_s.get("score"),
+            attack_similarity=raw_s.get("attackSimilarity"),
+            safe_similarity=raw_s.get("safeSimilarity"),
+            matched_category=raw_s.get("matchedCategory"),
+        )
 
-        llm_guard_score = None
-        if lg := branches_raw.get("llmGuard"):
-            llm_guard_score = lg.get("score")
+        # Parse LLM guard branch
+        raw_lg = branches_raw.get("llmGuard") or {}
+        llm_guard = LlmGuardBranch(
+            score=raw_lg.get("score"),
+            verdict=raw_lg.get("verdict"),
+            model_used=raw_lg.get("modelUsed"),
+        )
 
-        pii_detected = None
-        if p := branches_raw.get("pii"):
-            pii_detected = p.get("detected")
+        # Parse PII branch
+        raw_p = branches_raw.get("pii") or {}
+        pii = PiiBranch(
+            detected=raw_p.get("detected"),
+            entity_count=raw_p.get("entityCount"),
+            categories=raw_p.get("categories"),
+        )
 
-        content_mod_score = None
-        if cm := branches_raw.get("contentMod"):
-            content_mod_score = cm.get("score")
+        # Parse content mod branch
+        raw_cm = branches_raw.get("contentMod") or {}
+        content_mod = ContentModBranch(
+            score=raw_cm.get("score"),
+            confidence=raw_cm.get("confidence"),
+            triggered_categories=raw_cm.get("triggeredCategories"),
+            detected_language=raw_cm.get("detectedLanguage"),
+        )
+
+        # Parse scope drift branch
+        raw_sd = branches_raw.get("scopeDrift") or {}
+        scope_drift = ScopeDriftBranch(
+            enabled=raw_sd.get("enabled"),
+            available=raw_sd.get("available"),
+            drift_score=raw_sd.get("driftScore"),
+            level=raw_sd.get("level"),
+            explanation=raw_sd.get("explanation"),
+            latency_ms=raw_sd.get("latencyMs"),
+        )
 
         return DetectionResponse(
             request_id=data.get("requestId", ""),
-            decision=data.get("decision", "UNKNOWN"),
+            decision=data.get("decision", "ALLOWED"),
             score=data.get("score", 0),
             threat_level=data.get("threatLevel", "NONE"),
             categories=data.get("categories", []),
             branches=BranchScores(
-                heuristics=heuristics_score,
-                semantic=semantic_score,
-                llm_guard=llm_guard_score,
-                pii_detected=pii_detected,
-                content_mod=content_mod_score,
+                heuristics=heuristics,
+                semantic=semantic,
+                llm_guard=llm_guard,
+                pii=pii,
+                content_mod=content_mod,
+                scope_drift=scope_drift,
             ),
             decision_reason=data.get("decisionReason"),
             latency_ms=data.get("latencyMs", 0),

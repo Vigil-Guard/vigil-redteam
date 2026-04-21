@@ -5,7 +5,9 @@ from __future__ import annotations
 from vigil_redteam.client.vge import DetectionResponse
 from vigil_redteam.runner.comparator import compare
 from vigil_redteam.schema.enums import FailureType
-from vigil_redteam.schema.result import BranchScores
+from vigil_redteam.schema.result import (
+    BranchScores,
+)
 from vigil_redteam.schema.scenario import TestScenario
 
 
@@ -31,13 +33,18 @@ def _make_scenario(
 
 
 def _make_response(decision: str = "BLOCKED", score: float = 80) -> DetectionResponse:
+    from vigil_redteam.schema.result import HeuristicsBranch, SemanticBranch
+
     return DetectionResponse(
         request_id="req-1",
         decision=decision,
         score=score,
         threat_level="HIGH",
         categories=["PROMPT_INJECTION"],
-        branches=BranchScores(heuristics=80, semantic=70),
+        branches=BranchScores(
+            heuristics=HeuristicsBranch(score=80),
+            semantic=SemanticBranch(score=70),
+        ),
         decision_reason="test",
         latency_ms=100,
         raw={},

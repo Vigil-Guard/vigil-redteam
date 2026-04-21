@@ -70,7 +70,7 @@ def execute_run(
 def _run_single(client: VGEClient, scenario: TestScenario) -> TestResult:
     """Execute a single scenario and return the result."""
     try:
-        response = client.detect(scenario.user_input, scenario.metadata)
+        response = client.detect(scenario.user_input, scenario.metadata, scenario.tool)
         return compare(scenario, response)
     except Exception as e:
         return make_error_result(scenario, str(e))

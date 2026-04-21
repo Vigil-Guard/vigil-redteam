@@ -91,6 +91,10 @@ Any guardrail system with an HTTP API that:
 
 The bundled client targets Vigil Guard Enterprise (`POST /v1/guard/input`). To point the benchmark at a different system, drop in a new client under `src/vigil_redteam/client/` implementing the same `detect(prompt) -> DetectionResponse` contract — see `client/vge.py` as a reference (~140 lines including response parsing and retry).
 
+**API Response Parsing:**
+- Branch fields (heuristics, semantic, llm_guard, pii, content_mod, scope_drift) tolerate `null` values for optional fields (`explanations`, `categories`, `triggered_categories`, `enabled`, `available`, `explanation`). Use the branch helper methods (e.g., `heuristics.get_explanations()`, `scope_drift.is_enabled()`) to safely get defaults.
+- The scope_drift detection layer uses a 0-1 score scale (similarity/drift distance), while other detectors use 0-100. Metrics reporting automatically normalizes scope_drift scores for fair comparison in layer coverage and first-catching analysis.
+
 ### Environment
 
 ```bash
@@ -176,8 +180,8 @@ Output shows metric deltas with regression markers:
 - `business_block_cost` — what fraction of legitimate business messages is blocked
 
 ### Pipeline
-- `layer_coverage` — how many scenarios trigger each detection layer
-- `first_catching_layer` — which layer has the highest score per detected attack
+- `layer_coverage` — how many scenarios trigger each detection layer (includes heuristics, semantic, llm_guard, content_mod, scope_drift)
+- `first_catching_layer` — which layer has the highest score per detected attack (scope_drift score normalized to 0-100 scale for fair comparison)
 - `avg_latency_ms`, `p95_latency_ms`, `p99_latency_ms`
 - `unsafe_pass_severity` — average severity of missed attacks (0-5 scale)
 
@@ -335,7 +339,7 @@ Environment variable overrides: `VGE_API_KEY`, `VGE_API_URL`, `VIGIL_SKIP_TLS_VE
 
 ```bash
 pip install -e ".[dev]"
-pytest tests/          # 46 tests
+pytest tests/          # 66 tests
 ruff check src/        # linting
 ```
 

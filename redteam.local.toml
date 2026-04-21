@@ -1,0 +1,19 @@
+[api]
+base_url = "https://api.vigilguard"
+verify_tls = false
+timeout = 30
+
+[runner]
+concurrency = 4
+rps = 4
+retries = 2
+threshold = 40
+
+[datasets]
+golden_dir = "datasets/golden"
+coverage_dir = "datasets/coverage"
+mutation_dir = "datasets/mutation"
+
+[reporting]
+results_dir = "results"
+reports_dir = "reports"

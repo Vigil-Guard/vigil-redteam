@@ -61,4 +61,5 @@ class DetectionLayer(StrEnum):
     LLM_GUARD = "llm_guard"
     PII = "pii"
     CONTENT_MOD = "content_mod"
+    SCOPE_DRIFT = "scope_drift"
     RULES = "rules"

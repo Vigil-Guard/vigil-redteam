@@ -4,10 +4,33 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel, Field
 
 from vigil_redteam.schema.enums import AttackCategory, Channel, ContextMode, Tier, Verdict
+
+
+class ToolResultContext(BaseModel):
+    """Tool execution result context."""
+
+    content: Any
+    is_error: bool | None = Field(None, alias="isError")
+    duration_ms: int | None = Field(None, alias="durationMs")
+
+    model_config = {"extra": "ignore", "populate_by_name": True}
+
+
+class ToolContext(BaseModel):
+    """Tool invocation context for VGE API."""
+
+    name: str = Field(min_length=1, max_length=128)
+    id: str | None = Field(None, max_length=128)
+    vendor: str | None = None
+    args: Any | None = None
+    result: ToolResultContext | None = None
+
+    model_config = {"extra": "ignore"}
 
 
 class TestScenario(BaseModel):
@@ -46,6 +69,10 @@ class TestScenario(BaseModel):
             "Optional API metadata envelope sent as POST /v1/guard/input `metadata`. "
             "Experimental; used for manual validation of agent context logging (PRD_28)."
         ),
+    )
+    tool: ToolContext | None = Field(
+        default=None,
+        description="Optional tool invocation context forwarded to VGE API.",
     )
 
     model_config = {"extra": "ignore"}

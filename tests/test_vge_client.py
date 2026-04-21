@@ -29,7 +29,7 @@ def _ok_response(data: dict) -> httpx.Response:
         200,
         json={
             "requestId": "req-1",
-            "decision": "ALLOW",
+            "decision": "ALLOWED",
             "score": 0,
             "threatLevel": "LOW",
             "categories": [],
@@ -101,3 +101,69 @@ def test_detect_with_empty_metadata_does_not_send_metadata_key():
     client.detect("x", {})
 
     assert "metadata" not in captured["body"]
+
+
+def test_detect_without_tool_does_not_send_tool_key():
+
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode("utf-8"))
+        return _ok_response({})
+
+    client = _make_client(handler)
+    client.detect("hello", tool=None)
+
+    assert captured["body"] == {"prompt": "hello"}
+    assert "tool" not in captured["body"]
+
+
+def test_detect_with_tool_forwards_tool_data():
+    from vigil_redteam.schema.scenario import ToolContext, ToolResultContext
+
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode("utf-8"))
+        return _ok_response({})
+
+    tool = ToolContext(
+        name="search_web",
+        id="tool-123",
+        vendor="anthropic",
+        args={"query": "python"},
+        result=ToolResultContext(content={"results": []}, is_error=False, duration_ms=50),
+    )
+
+    client = _make_client(handler)
+    client.detect("hello", tool=tool)
+
+    assert captured["body"]["prompt"] == "hello"
+    assert captured["body"]["tool"]["name"] == "search_web"
+    assert captured["body"]["tool"]["id"] == "tool-123"
+    assert captured["body"]["tool"]["vendor"] == "anthropic"
+    assert captured["body"]["tool"]["args"] == {"query": "python"}
+    assert captured["body"]["tool"]["result"]["content"] == {"results": []}
+    assert captured["body"]["tool"]["result"]["isError"] is False
+    assert captured["body"]["tool"]["result"]["durationMs"] == 50
+
+
+def test_detect_with_partial_tool_still_serializes():
+    from vigil_redteam.schema.scenario import ToolContext
+
+    captured: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content.decode("utf-8"))
+        return _ok_response({})
+
+    tool = ToolContext(name="just_name")
+
+    client = _make_client(handler)
+    client.detect("hello", tool=tool)
+
+    assert captured["body"]["tool"]["name"] == "just_name"
+    assert "id" not in captured["body"]["tool"]
+    assert "vendor" not in captured["body"]["tool"]
+    assert "args" not in captured["body"]["tool"]
+    assert "result" not in captured["body"]["tool"]
