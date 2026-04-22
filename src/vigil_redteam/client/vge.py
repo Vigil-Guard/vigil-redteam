@@ -101,12 +101,16 @@ class VGEClient:
         self._rate_limiter.wait()
 
         url = f"{self._base_url}/v1/guard/input"
-        payload: dict[str, object] = {
-            "prompt": prompt,
+        payload: dict[str, object] = {"prompt": prompt}
+
+        # Build metadata envelope with platform identifier
+        metadata_envelope: dict[str, str | int | float | bool] = {
             "platform": "vigil-redteam",
         }
         if metadata:
-            payload["metadata"] = metadata
+            metadata_envelope.update(metadata)
+        payload["metadata"] = metadata_envelope
+
         if tool:
             tool_data: dict[str, object] = {"name": tool.name}
             if tool.id is not None:
