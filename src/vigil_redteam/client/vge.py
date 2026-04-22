@@ -101,7 +101,10 @@ class VGEClient:
         self._rate_limiter.wait()
 
         url = f"{self._base_url}/v1/guard/input"
-        payload: dict[str, object] = {"prompt": prompt}
+        payload: dict[str, object] = {
+            "prompt": prompt,
+            "platform": "vigil-redteam",
+        }
         if metadata:
             payload["metadata"] = metadata
         if tool:
