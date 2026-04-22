@@ -81,6 +81,8 @@ For HackAPrompt import (parquet support):
 pip install pandas pyarrow
 ```
 
+⚠️ **Important:** This is a public repository. Test results (`results/` and `reports/` directories) contain sensitive API response data and operational metadata. These directories are gitignored and should never be committed. Archive benchmark results in a private system if long-term storage is needed.
+
 ## Running the benchmark
 
 ### Prerequisites
@@ -144,11 +146,11 @@ Reports automatically show split metrics and flag contextual results as diagnost
 
 ### Output
 
-Each run produces two files:
+Each run produces two files in local directories (not committed to repo):
 - `results/run_YYYYMMDD_HHMMSS.json` — full results with per-scenario API responses
 - `reports/report_YYYYMMDD_HHMMSS.md` — markdown report with metrics and failure analysis
 
-Both directories are gitignored.
+**Important:** Both `results/` and `reports/` directories are gitignored. Test results are sensitive operational data (API responses, timestamps, metadata) and should never be committed to this public repository. Archive results locally or in a private system.
 
 ### Compare runs
 
@@ -163,6 +165,8 @@ Output shows metric deltas with regression markers:
   Bypass rate: 30.8% -> 24.9% (-5.9%) [+]
   Avg latency: 61.0 -> 58.0 (-3.0) [+]
 ```
+
+**Note:** Result files contain sensitive API data. Keep them local and never commit to the repository.
 
 ## Metrics
 
