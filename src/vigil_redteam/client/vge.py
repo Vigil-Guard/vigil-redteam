@@ -80,6 +80,7 @@ class VGEClient:
             headers={
                 "Authorization": f"Bearer {self._api_key}",
                 "Content-Type": "application/json",
+                "User-Agent": "vigil-redteam/1.0",
             },
         )
 
