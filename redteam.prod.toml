@@ -1,5 +1,7 @@
 [api]
-base_url = "https://api.vigilguard-prod"
+# The prod-LAN host behind this profile was retired on 2026-11-17.
+# 2.x.x prod tests run on the DGX: set base_url to its stack before use.
+base_url = "https://your-guardrail.example.com"
 verify_tls = false
 timeout = 30
 
